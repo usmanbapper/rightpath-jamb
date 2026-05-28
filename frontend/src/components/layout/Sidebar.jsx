@@ -1,17 +1,19 @@
+'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
 import {
-  LayoutDashboard, BookOpen, History, Award, User,
+  LayoutDashboard, History, User,
   Users, FileQuestion, Key, LogOut, Target, ChevronRight,
 } from 'lucide-react';
 
 const studentNav = [
-  { href:'/dashboard',    label:'Dashboard',   icon:LayoutDashboard },
-  { href:'/exam/start',   label:'Start Exam',  icon:Target },
-  { href:'/exam/history', label:'History',     icon:History },
-  { href:'/profile',      label:'Profile',     icon:User },
+  { href:'/dashboard',    label:'Dashboard',  icon:LayoutDashboard },
+  { href:'/exam/start',   label:'Start Exam', icon:Target },
+  { href:'/exam/history', label:'History',    icon:History },
+  { href:'/profile',      label:'Profile',    icon:User },
 ];
 
 const adminNav = [
@@ -33,16 +35,17 @@ export default function Sidebar() {
       flexShrink:0,
     }}>
       {/* Logo */}
-      <div style={{ padding:'24px 20px 20px', borderBottom:'1px solid var(--border)' }}>
+      <div style={{ padding:'20px 20px 16px', borderBottom:'1px solid var(--border)' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <div style={{
-            width:36, height:36, background:'var(--brand)', borderRadius:10,
-            display:'flex', alignItems:'center', justifyContent:'center',
-          }}>
-            <Target size={20} color="#fff" />
-          </div>
+          <Image
+            src="/logo.png"
+            alt="Rightpath Academy"
+            width={48}
+            height={48}
+            style={{ objectFit:'contain', borderRadius:8 }}
+          />
           <div>
-            <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1rem', color:'var(--brand)', lineHeight:1.1 }}>Rightpath</div>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'.95rem', color:'var(--brand)', lineHeight:1.2 }}>Rightpath</div>
             <div style={{ fontSize:'.7rem', color:'var(--text-3)', fontWeight:500 }}>JAMB Practice</div>
           </div>
         </div>
@@ -59,6 +62,7 @@ export default function Sidebar() {
               transition:'all .18s',
               background: active ? 'var(--brand-light)' : 'transparent',
               color: active ? 'var(--brand)' : 'var(--text-2)',
+              textDecoration:'none',
             }}>
               <Icon size={18} />
               {label}
@@ -75,6 +79,7 @@ export default function Sidebar() {
             width:36, height:36, borderRadius:'50%', background:'var(--brand-light)',
             display:'flex', alignItems:'center', justifyContent:'center',
             fontFamily:'var(--font-display)', fontWeight:700, color:'var(--brand)', fontSize:'.9rem',
+            flexShrink:0,
           }}>
             {user?.full_name?.[0]?.toUpperCase() || '?'}
           </div>
@@ -98,43 +103,5 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
-  );
-}
-
-
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/store/auth.store';
-import Sidebar from './Sidebar';
-import Spinner from '@/components/ui/Spinner';
-
-export default function AppShell({ children, adminOnly = false }) {
-  const router = useRouter();
-  const { user, isLoading, fetchUser } = useAuthStore();
-
-  useEffect(() => { fetchUser(); }, []);
-
-  useEffect(() => {
-    if (isLoading) return;
-    if (!user) { router.replace('/login'); return; }
-    if (adminOnly && user.role === 'student') { router.replace('/dashboard'); return; }
-  }, [user, isLoading, adminOnly]);
-
-  if (isLoading) {
-    return (
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh' }}>
-        <Spinner size={40} />
-      </div>
-    );
-  }
-  if (!user) return null;
-
-  return (
-    <div style={{ display:'flex', minHeight:'100vh' }}>
-      <Sidebar />
-      <main style={{ flex:1, minWidth:0, padding:'32px 36px', overflowY:'auto' }}>
-        {children}
-      </main>
-    </div>
   );
 }

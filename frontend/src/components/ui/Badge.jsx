@@ -1,46 +1,32 @@
 'use client';
 
-const presets = {
-  success: { bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0' },
-  danger:  { bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
-  warning: { bg: '#fff7ed', color: '#c2410c', border: '#fed7aa' },
-  info:    { bg: 'var(--brand-light)', color: 'var(--brand)', border: '#c7d7fd' },
-  default: { bg: 'var(--surface-2)', color: 'var(--text-2)', border: 'var(--border)' },
+const colors = {
+  blue:   { bg:'#e8f0fd', color:'#1a56db' },
+  green:  { bg:'#dcfce7', color:'#16a34a' },
+  yellow: { bg:'#fef9c3', color:'#ca8a04' },
+  red:    { bg:'#fee2e2', color:'#dc2626' },
+  orange: { bg:'#ffedd5', color:'#ea580c' },
+  purple: { bg:'#f3e8ff', color:'#9333ea' },
+  gray:   { bg:'#f1f5f9', color:'#64748b' },
+  success:{ bg:'#dcfce7', color:'#16a34a' },
+  danger: { bg:'#fee2e2', color:'#dc2626' },
+  warning:{ bg:'#fef9c3', color:'#ca8a04' },
+  info:   { bg:'#e8f0fd', color:'#1a56db' },
+  default:{ bg:'#f1f5f9', color:'#64748b' },
 };
 
-/**
- * Badge / pill component.
- *
- * Props:
- *  variant  — 'success' | 'danger' | 'warning' | 'info' | 'default'
- *  icon     — React element (e.g. emoji string or lucide icon)
- *  size     — 'sm' | 'md' (default 'md')
- *  style    — inline style overrides
- */
-export default function Badge({ children, variant = 'default', icon, size = 'md', style, ...props }) {
-  const { bg, color, border } = presets[variant] || presets.default;
+export default function Badge({ children, color = 'blue', variant, icon, size, style }) {
+  const key = variant || color;
+  const c = colors[key] || colors.blue;
   const sm = size === 'sm';
-
   return (
-    <span
-      style={{
-        display:      'inline-flex',
-        alignItems:   'center',
-        gap:          sm ? 4 : 6,
-        padding:      sm ? '2px 8px' : '4px 12px',
-        borderRadius: 999,
-        fontSize:     sm ? '.72rem' : '.8rem',
-        fontWeight:   600,
-        lineHeight:   1.4,
-        background:   bg,
-        color,
-        border:       `1px solid ${border}`,
-        whiteSpace:   'nowrap',
-        ...style,
-      }}
-      {...props}
-    >
-      {icon && <span style={{ fontSize: sm ? '1em' : '1.1em', lineHeight: 1 }}>{icon}</span>}
+    <span style={{
+      display:'inline-flex', alignItems:'center', gap: sm ? 4 : 6,
+      padding: sm ? '2px 8px' : '3px 10px',
+      borderRadius:99, fontSize: sm ? '.72rem' : '.78rem', fontWeight:600,
+      background:c.bg, color:c.color, whiteSpace:'nowrap', ...style,
+    }}>
+      {icon && <span style={{ lineHeight:1 }}>{icon}</span>}
       {children}
     </span>
   );

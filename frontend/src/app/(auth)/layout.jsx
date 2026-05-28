@@ -1,3 +1,6 @@
+'use client';
+
+import Image from 'next/image';
 
 export default function AuthLayout({ children }) {
   return (
@@ -11,18 +14,23 @@ export default function AuthLayout({ children }) {
         padding:'60px 80px', color:'#fff',
       }} className="auth-left">
         <div style={{ marginBottom:48 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:32 }}>
+          {/* Logo */}
+          <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:32 }}>
             <div style={{
-              width:44, height:44, background:'rgba(255,255,255,.2)',
-              borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center',
-              backdropFilter:'blur(8px)',
+              width:64, height:64, background:'rgba(255,255,255,.95)',
+              borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center',
+              padding:6, boxShadow:'0 4px 20px rgba(0,0,0,.2)',
             }}>
-              🎯
+              <Image src="/logo.png" alt="Rightpath Academy" width={52} height={52} style={{ objectFit:'contain' }} />
             </div>
-            <div style={{ fontFamily:'var(--font-display)', fontSize:'1.4rem', fontWeight:800 }}>
-              Rightpath JAMB
+            <div>
+              <div style={{ fontFamily:'var(--font-display)', fontSize:'1.4rem', fontWeight:800, lineHeight:1.1 }}>
+                Rightpath Academy
+              </div>
+              <div style={{ fontSize:'.85rem', opacity:.75, marginTop:2 }}>JAMB Practice Platform</div>
             </div>
           </div>
+
           <h1 style={{
             fontFamily:'var(--font-display)', fontSize:'2.6rem', fontWeight:800,
             lineHeight:1.15, marginBottom:16,
@@ -48,7 +56,7 @@ export default function AuthLayout({ children }) {
         </div>
       </div>
 
-      {/* Right panel — the form */}
+      {/* Right panel */}
       <div style={{
         width:480, background:'var(--bg)', display:'flex', alignItems:'center',
         justifyContent:'center', padding:40,
@@ -58,10 +66,9 @@ export default function AuthLayout({ children }) {
         </div>
       </div>
 
-      <style>{`
+      <style suppressHydrationWarning>{`
         @media (max-width: 900px) {
           .auth-left { display: none !important; }
-          div[style*="width:480px"] { width: 100% !important; }
         }
       `}</style>
     </div>

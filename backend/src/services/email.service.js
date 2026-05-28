@@ -11,7 +11,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const FROM = process.env.EMAIL_FROM || 'Rightpath JAMB <no-reply@rightpath.ng>';
+const FROM = process.env.EMAIL_FROM || 'Rightpath Learners Academy JAMB <no-reply@rightpath.ng>';
 
 // ── Helpers ──────────────────────────────────────────────────
 function baseTemplate(title, bodyHtml) {
@@ -38,7 +38,7 @@ function baseTemplate(title, bodyHtml) {
 <body>
   <div class="wrapper">
     <div class="header">
-      <h1>🎯 Rightpath JAMB</h1>
+      <h1>🎯 Rightpath Learners Academy JAMB</h1>
       <p>Your JAMB Success Partner</p>
     </div>
     <div class="body">

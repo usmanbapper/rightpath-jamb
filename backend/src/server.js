@@ -47,9 +47,10 @@ const limiter = rateLimit({
 });
 
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
+  windowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX) || 50,
   message: { error: 'Too many authentication attempts.' },
+  skip: () => process.env.NODE_ENV === 'development',
 });
 
 app.use('/api/', limiter);
