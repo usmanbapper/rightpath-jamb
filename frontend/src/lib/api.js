@@ -103,11 +103,13 @@ export const adminApi = {
   getStudents:     (params)     => api.get('/admin/students', { params }),
   toggleStudent:   (id)         => api.patch(`/admin/students/${id}/toggle`),
   // Questions
+  getSubjects:     ()            => api.get('/admin/subjects'),
   getQuestions:    (params)     => api.get('/admin/questions', { params }),
   addQuestion:     (data)       => api.post('/admin/questions/manual', data),
-  uploadQuestions: (formData)   => api.post('/admin/questions/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
+  uploadQuestions: (formData) => api.post('/admin/questions/upload', formData, {
+  headers: { 'Content-Type': 'multipart/form-data' },
+  timeout: 120000, // 2 minutes
+ }),
   deleteQuestion:  (id)         => api.delete(`/admin/questions/${id}`),
 };
 

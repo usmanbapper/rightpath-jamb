@@ -10,6 +10,8 @@ const {
   getDashboard,
 } = require('../controllers/admin.controller');
 
+const { getSubjects } = require('../controllers/exam.controller');
+
 const { authenticate, requireRole } = require('../middleware/auth.middleware');
 
 function validate(req, res, next) {
@@ -42,6 +44,7 @@ router.get('/students', listStudents);
 router.patch('/students/:id/toggle', toggleStudentStatus);
 
 // ── Questions ─────────────────────────────────────────────────
+router.get('/subjects', getSubjects);
 router.get('/questions', listQuestions);
 
 router.post('/questions/manual',
@@ -60,8 +63,6 @@ router.post('/questions/manual',
 
 router.post('/questions/upload',
   upload.single('file'),
-  [body('subject_id').isUUID().withMessage('Valid subject_id required.')],
-  validate,
   uploadQuestions
 );
 

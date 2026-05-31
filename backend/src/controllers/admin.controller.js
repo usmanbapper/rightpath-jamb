@@ -305,30 +305,26 @@ async function uploadQuestions(req, res, next) {
       );
       const batchId = batchRes.rows[0].id;
 
-      let inserted  = 0;
-      const errors  = [];
+      let inserted = 0;
+      const errors = [];
 
-      const client = await getClient();
-      try {
-        await client.query('BEGIN');
+      for (let i = 0; i < questions.length; i++) {
+        const q = questions[i];
 
-        for (let i = 0; i < questions.length; i++) {
-          const q = questions[i];
+        const missing = required.filter(f => !q[f]);
+        if (missing.length > 0) {
+          errors.push({ index: i, error: `Missing: ${missing.join(', ')}` });
+          continue;
+        }
 
-          // Validate required fields
-          const missing = required.filter(f => !q[f]);
-          if (missing.length > 0) {
-            errors.push({ index: i, error: `Missing: ${missing.join(', ')}` });
-            continue;
-          }
+        const answer = String(q.correct_answer).toUpperCase();
+        if (!['A', 'B', 'C', 'D'].includes(answer)) {
+          errors.push({ index: i, error: 'correct_answer must be A, B, C, or D.' });
+          continue;
+        }
 
-          const answer = String(q.correct_answer).toUpperCase();
-          if (!['A', 'B', 'C', 'D'].includes(answer)) {
-            errors.push({ index: i, error: 'correct_answer must be A, B, C, or D.' });
-            continue;
-          }
-
-          await client.query(
+        try {
+          await query(
             `INSERT INTO questions
                (subject_id, question_text, option_a, option_b, option_c, option_d,
                 correct_answer, explanation, year, difficulty, topic, uploaded_by, source)
@@ -339,38 +335,29 @@ async function uploadQuestions(req, res, next) {
               q.question_text,
               q.option_a, q.option_b, q.option_c, q.option_d,
               answer,
-              q.explanation    || null,
-              q.year           || null,
-              q.difficulty     || 'medium',
-              q.topic          || null,
+              q.explanation || null,
+              q.year        || null,
+              q.difficulty  || 'medium',
+              q.topic       || null,
               req.user.id,
             ]
           );
           inserted++;
+        } catch (rowErr) {
+          errors.push({ index: i, error: rowErr.message });
         }
-
-        await client.query(
-          `UPDATE upload_batches
-           SET status = 'completed', questions_count = $1 WHERE id = $2`,
-          [inserted, batchId]
-        );
-        await client.query('COMMIT');
-      } catch (err) {
-        await client.query('ROLLBACK');
-        await query(
-          "UPDATE upload_batches SET status = 'failed', error_message = $1 WHERE id = $2",
-          [err.message, batchId]
-        );
-        throw err;
-      } finally {
-        client.release();
       }
 
+      await query(
+        `UPDATE upload_batches SET status = 'completed', questions_count = $1 WHERE id = $2`,
+        [inserted, batchId]
+      );
+
       return res.status(201).json({
-        message:        `Uploaded ${inserted} question(s) successfully.`,
-        batch_id:       batchId,
+        message:  `Uploaded ${inserted} question(s) successfully.`,
+        batch_id: batchId,
         inserted,
-        skipped:        questions.length - inserted - errors.length,
+        skipped:  questions.length - inserted - errors.length,
         errors,
       });
     }
