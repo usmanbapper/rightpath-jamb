@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // ─── Axios instance ───────────────────────────────────────────
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api',
   withCredentials: true,        // send httpOnly cookies
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
