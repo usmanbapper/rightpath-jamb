@@ -56,19 +56,63 @@ export default function AuthLayout({ children }) {
         </div>
       </div>
 
-      {/* Right panel */}
-      <div style={{
-        width:480, background:'var(--bg)', display:'flex', alignItems:'center',
-        justifyContent:'center', padding:40,
-      }}>
+      {/* Right panel — the form */}
+      <div className="auth-right">
         <div style={{ width:'100%', maxWidth:400, animation:'fadeIn .35s ease both' }}>
+          {/* Mobile logo */}
+          <div className="auth-mobile-logo">
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:24 }}>
+              <div style={{
+                width:44, height:44, background:'var(--brand)',
+                borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center',
+                padding:4,
+              }}>
+                <Image src="/logo.png" alt="Rightpath" width={36} height={36} style={{ objectFit:'contain' }} />
+              </div>
+              <div>
+                <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'.95rem', color:'var(--brand)' }}>Rightpath Academy</div>
+                <div style={{ fontSize:'.7rem', color:'var(--text-3)' }}>JAMB Practice Platform</div>
+              </div>
+            </div>
+          </div>
           {children}
         </div>
       </div>
 
       <style suppressHydrationWarning>{`
+        .auth-left {
+          flex: 1;
+        }
+
+        .auth-right {
+          width: 480px;
+          background: var(--bg);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 40px;
+        }
+
+        .auth-mobile-logo {
+          display: none;
+        }
+
         @media (max-width: 900px) {
           .auth-left { display: none !important; }
+        }
+
+        @media (max-width: 600px) {
+          .auth-right {
+            width: 100%;
+            min-height: 100vh;
+            padding: 32px 20px;
+            align-items: flex-start;
+            padding-top: 48px;
+          }
+
+          .auth-mobile-logo {
+            display: block;
+          }
         }
       `}</style>
     </div>
