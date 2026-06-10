@@ -17,6 +17,7 @@ const activationRoutes = require('./routes/activation.routes');
 const { errorHandler, notFound } = require('./middleware/error.middleware');
 
 const app = express();
+app.set('trust proxy', 1);
 
 // ─── Security ────────────────────────────────────────────────
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));

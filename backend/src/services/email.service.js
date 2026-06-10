@@ -1,17 +1,8 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-// ── Transporter ─────────────────────────────────────────────
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT) || 587,
-  secure: parseInt(process.env.SMTP_PORT) === 465,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-const FROM = process.env.EMAIL_FROM || 'Rightpath Learners Academy JAMB <no-reply@rightpath.ng>';
+const FROM = process.env.EMAIL_FROM || 'Rightpath Academy <onboarding@resend.dev>';
 
 // ── Helpers ──────────────────────────────────────────────────
 function baseTemplate(title, bodyHtml) {
@@ -31,7 +22,6 @@ function baseTemplate(title, bodyHtml) {
     .body { padding:40px; color:#333; line-height:1.7; }
     .body h2 { margin-top:0; color:#1a56db; }
     .btn { display:inline-block; margin:24px 0; padding:14px 32px; background:#1a56db; color:#fff !important; text-decoration:none; border-radius:8px; font-weight:600; font-size:16px; }
-    .token-box { background:#f0f4ff; border:1px solid #c7d7fd; border-radius:8px; padding:16px 24px; font-size:22px; font-weight:700; letter-spacing:4px; text-align:center; color:#1a56db; margin:20px 0; }
     .footer { background:#f8fafc; padding:20px 40px; text-align:center; color:#6b7280; font-size:13px; border-top:1px solid #e5e7eb; }
   </style>
 </head>
@@ -55,9 +45,6 @@ function baseTemplate(title, bodyHtml) {
 
 // ── Public API ───────────────────────────────────────────────
 
-/**
- * Send email verification link.
- */
 async function sendVerificationEmail(to, fullName, token) {
   const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
 
@@ -71,12 +58,16 @@ async function sendVerificationEmail(to, fullName, token) {
     <p style="word-break:break-all;font-size:13px;color:#1a56db">${verifyUrl}</p>
   `);
 
-  await transporter.sendMail({ from: FROM, to, subject: '✅ Verify your Rightpath JAMB account', html });
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to,
+    subject: '✅ Verify your Rightpath JAMB account',
+    html,
+  });
+
+  if (error) throw new Error(error.message);
 }
 
-/**
- * Send password reset email.
- */
 async function sendPasswordResetEmail(to, fullName, token) {
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
 
@@ -89,12 +80,16 @@ async function sendPasswordResetEmail(to, fullName, token) {
     <p style="color:#6b7280;font-size:13px">This link expires in <strong>1 hour</strong>. If you didn't request a password reset, please ignore this email — your account is safe.</p>
   `);
 
-  await transporter.sendMail({ from: FROM, to, subject: '🔐 Reset your Rightpath JAMB password', html });
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to,
+    subject: '🔐 Reset your Rightpath JAMB password',
+    html,
+  });
+
+  if (error) throw new Error(error.message);
 }
 
-/**
- * Send welcome email after email is verified.
- */
 async function sendWelcomeEmail(to, fullName) {
   const html = baseTemplate('Welcome to Rightpath JAMB!', `
     <h2>You're all set, ${fullName}! 🎉</h2>
@@ -115,7 +110,14 @@ async function sendWelcomeEmail(to, fullName) {
     </p>
   `);
 
-  await transporter.sendMail({ from: FROM, to, subject: '🎉 Welcome to Rightpath JAMB!', html });
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to,
+    subject: '🎉 Welcome to Rightpath JAMB!',
+    html,
+  });
+
+  if (error) throw new Error(error.message);
 }
 
 module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendWelcomeEmail };
