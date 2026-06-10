@@ -1,36 +1,56 @@
 'use client';
 
-
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
-import { Flag, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import { Flag, ChevronLeft, ChevronRight, AlertCircle, BookOpen } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
 import { examApi } from '@/lib/api';
 import { formatTime, getErrorMessage } from '@/lib/utils';
 
-const SYNC_INTERVAL = 30; // seconds
+const SYNC_INTERVAL = 30;
+
+// Distinct color per subject
+const SUBJECT_COLORS = {
+  'Use of English':            { bg:'#eff6ff', border:'#3b82f6', text:'#1d4ed8', dot:'#3b82f6' },
+  'Mathematics':               { bg:'#faf5ff', border:'#8b5cf6', text:'#6d28d9', dot:'#8b5cf6' },
+  'Physics':                   { bg:'#fff7ed', border:'#f97316', text:'#c2410c', dot:'#f97316' },
+  'Chemistry':                 { bg:'#f0fdf4', border:'#22c55e', text:'#15803d', dot:'#22c55e' },
+  'Biology':                   { bg:'#fdf4ff', border:'#a855f7', text:'#7e22ce', dot:'#a855f7' },
+  'Economics':                 { bg:'#fefce8', border:'#eab308', text:'#a16207', dot:'#eab308' },
+  'Literature in English':     { bg:'#fff1f2', border:'#f43f5e', text:'#be123c', dot:'#f43f5e' },
+  'Accounting':                { bg:'#f0f9ff', border:'#0ea5e9', text:'#0369a1', dot:'#0ea5e9' },
+  'Commerce':                  { bg:'#fff8f1', border:'#fb923c', text:'#c2410c', dot:'#fb923c' },
+  'Government':                { bg:'#f0fdfa', border:'#14b8a6', text:'#0f766e', dot:'#14b8a6' },
+};
+const DEFAULT_COLOR = { bg:'#f8fafc', border:'#94a3b8', text:'#475569', dot:'#94a3b8' };
+
+function getColor(name) {
+  return SUBJECT_COLORS[name] || DEFAULT_COLOR;
+}
 
 export default function ExamPage() {
   const { sessionId } = useParams();
-  const router = useRouter();
+  const router        = useRouter();
 
-  const [session, setSession]     = useState(null);
-  const [questions, setQuestions] = useState([]);
-  const [current, setCurrent]     = useState(0);
-  const [answers, setAnswers]     = useState({});   // examQuestionId -> letter
-  const [flagged, setFlagged]     = useState({});   // examQuestionId -> bool
-  const [timeLeft, setTimeLeft]   = useState(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [session,     setSession]     = useState(null);
+  const [questions,   setQuestions]   = useState([]);
+  const [current,     setCurrent]     = useState(0);
+  const [answers,     setAnswers]     = useState({});
+  const [flagged,     setFlagged]     = useState({});
+  const [timeLeft,    setTimeLeft]    = useState(null);
+  const [submitting,  setSubmitting]  = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [loading, setLoading]     = useState(true);
+  const [loading,     setLoading]     = useState(true);
+
+  const prevSubjectRef = useRef(null);
 
   const syncRef    = useRef(0);
   const timerRef   = useRef(null);
   const answerTime = useRef(Date.now());
 
-  // ── Load exam data ──────────────────────────────────────────
+  // ── Load ─────────────────────────────────────────────────────
   useEffect(() => {
     const stored = sessionStorage.getItem('exam_session');
     if (stored) {
@@ -38,6 +58,7 @@ export default function ExamPage() {
       setSession(s);
       setQuestions(q);
       setTimeLeft(s.duration_seconds);
+      prevSubjectRef.current = q[0]?.subject_name || null;
       setLoading(false);
     } else {
       toast.error('Session data not found. Please start a new exam.');
@@ -45,11 +66,10 @@ export default function ExamPage() {
     }
   }, []);
 
-  // ── Timer ───────────────────────────────────────────────────
+  // ── Timer ─────────────────────────────────────────────────────
   useEffect(() => {
     if (timeLeft === null) return;
     if (timeLeft <= 0) { handleSubmit(true); return; }
-
     timerRef.current = setTimeout(() => {
       setTimeLeft(t => t - 1);
       syncRef.current += 1;
@@ -58,42 +78,38 @@ export default function ExamPage() {
         examApi.syncTime(sessionId, timeLeft - 1).catch(() => {});
       }
     }, 1000);
-
     return () => clearTimeout(timerRef.current);
   }, [timeLeft]);
 
   const q = questions[current];
 
-  // ── Answer ──────────────────────────────────────────────────
+  // ── Answer ───────────────────────────────────────────────────
   async function selectAnswer(letter) {
     if (!q) return;
     const id = q.exam_question_id;
     const timeSpent = Math.floor((Date.now() - answerTime.current) / 1000);
     answerTime.current = Date.now();
-
     setAnswers(prev => ({ ...prev, [id]: letter }));
     try {
       await examApi.saveAnswer(sessionId, {
-        exam_question_id: id,
-        selected_answer:  letter,
-        time_spent_seconds: timeSpent,
+        exam_question_id:    id,
+        selected_answer:     letter,
+        time_spent_seconds:  timeSpent,
       });
-    } catch (err) {
+    } catch {
       toast.error('Failed to save answer — check connection.');
     }
   }
 
-  // ── Flag ────────────────────────────────────────────────────
+  // ── Flag ─────────────────────────────────────────────────────
   async function toggleFlag() {
     if (!q) return;
     const id = q.exam_question_id;
     setFlagged(prev => ({ ...prev, [id]: !prev[id] }));
-    try {
-      await examApi.flagQuestion(sessionId, { exam_question_id: id });
-    } catch {}
+    try { await examApi.flagQuestion(sessionId, { exam_question_id: id }); } catch {}
   }
 
-  // ── Submit ──────────────────────────────────────────────────
+  // ── Submit ───────────────────────────────────────────────────
   async function handleSubmit(timedOut = false) {
     clearTimeout(timerRef.current);
     setSubmitting(true);
@@ -123,8 +139,9 @@ export default function ExamPage() {
   const timerColor = timerPct > 50 ? 'var(--success)' : timerPct > 20 ? 'var(--accent)' : 'var(--danger)';
   const isFlagged  = flagged[q.exam_question_id] || q.is_flagged;
   const selected   = answers[q.exam_question_id] || q.selected_answer;
+  const subColor   = getColor(q.subject_name);
 
-  // Group questions by subject for the navigator
+  // Subject groups for navigator
   const subjectGroups = {};
   questions.forEach((qn, idx) => {
     const name = qn.subject_name || 'Other';
@@ -147,44 +164,59 @@ export default function ExamPage() {
             🎯 Rightpath JAMB
           </div>
           <div style={{ flex:1 }} />
-
-          {/* Timer */}
           <div style={{ textAlign:'center' }}>
-            <div style={{
-              fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.5rem',
-              color:timerColor, letterSpacing:'-1px',
-            }}>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.5rem', color:timerColor, letterSpacing:'-1px' }}>
               {formatTime(timeLeft || 0)}
             </div>
             <div style={{ fontSize:'.7rem', color:'var(--text-3)' }}>remaining</div>
           </div>
-
-          {/* Timer bar */}
           <div style={{ width:120, height:6, background:'var(--border)', borderRadius:3, overflow:'hidden' }}>
             <div style={{ height:'100%', width:`${timerPct}%`, background:timerColor, borderRadius:3, transition:'width .5s, background .5s' }} />
           </div>
-
           <div style={{ fontSize:'.85rem', color:'var(--text-2)', fontWeight:600 }}>
             {answered}/{totalQ} answered
           </div>
-
           <Button size="sm" variant="danger" onClick={() => setShowConfirm(true)} loading={submitting}>
             Submit
           </Button>
         </div>
 
-        {/* Question */}
-        <div style={{ flex:1, overflowY:'auto', padding:'32px 40px' }}>
-          <div className="animate-fade" key={current}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
-              <div>
-                <span style={{ fontSize:'.78rem', fontWeight:600, color:'var(--brand)', textTransform:'uppercase', letterSpacing:'.5px' }}>
-                  {q.subject_name}
-                </span>
-                <span style={{ marginLeft:12, fontSize:'.85rem', color:'var(--text-3)' }}>
-                  Question {current + 1} of {totalQ}
-                </span>
+        {/* ── Subject Banner ── */}
+        <div style={{
+          background: subColor.bg,
+          borderBottom: `3px solid ${subColor.border}`,
+          padding:'12px 40px',
+          display:'flex', alignItems:'center', gap:10,
+          transition:'background .3s, border-color .3s',
+        }}>
+          <div style={{ width:10, height:10, borderRadius:'50%', background: subColor.dot, flexShrink:0 }} />
+          <BookOpen size={15} color={subColor.text} />
+          <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1rem', color: subColor.text }}>
+            {q.subject_name}
+          </span>
+          <span style={{ fontSize:'.8rem', color: subColor.text, opacity:.55, marginLeft:2 }}>
+            · Q{current + 1} of {totalQ}
+          </span>
+
+          {/* Subject progress within this subject */}
+          {(() => {
+            const group = subjectGroups[q.subject_name] || [];
+            const answeredInSubject = group.filter(({ qn }) => answers[qn.exam_question_id] || qn.selected_answer).length;
+            return (
+              <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8, fontSize:'.78rem', color: subColor.text, opacity:.7 }}>
+                <span>{answeredInSubject}/{group.length} done</span>
+                <div style={{ width:60, height:4, background: subColor.border + '33', borderRadius:2, overflow:'hidden' }}>
+                  <div style={{ height:'100%', width:`${(answeredInSubject/group.length)*100}%`, background: subColor.border, borderRadius:2, transition:'width .3s' }} />
+                </div>
               </div>
+            );
+          })()}
+        </div>
+
+        {/* Question */}
+        <div style={{ flex:1, overflowY:'auto', padding:'28px 40px' }}>
+          <div className="animate-fade" key={current}>
+            <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:16 }}>
               <button onClick={toggleFlag} style={{
                 display:'flex', alignItems:'center', gap:6, padding:'6px 12px',
                 borderRadius:8, border:`1.5px solid ${isFlagged ? 'var(--accent)' : 'var(--border)'}`,
@@ -210,23 +242,23 @@ export default function ExamPage() {
                     style={{
                       display:'flex', alignItems:'flex-start', gap:14, padding:'14px 18px',
                       borderRadius:'var(--radius-sm)', textAlign:'left', width:'100%',
-                      border:`2px solid ${isSelected ? 'var(--brand)' : 'var(--border)'}`,
-                      background: isSelected ? 'var(--brand-light)' : 'var(--surface)',
+                      border:`2px solid ${isSelected ? subColor.border : 'var(--border)'}`,
+                      background: isSelected ? subColor.bg : 'var(--surface)',
                       cursor:'pointer', transition:'all .15s',
                     }}
-                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = '#93c5fd'; }}
+                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = subColor.border + '88'; }}
                     onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = 'var(--border)'; }}
                   >
                     <span style={{
                       width:28, height:28, borderRadius:'50%', flexShrink:0,
-                      background: isSelected ? 'var(--brand)' : 'var(--border)',
+                      background: isSelected ? subColor.border : 'var(--border)',
                       color: isSelected ? '#fff' : 'var(--text-2)',
                       display:'flex', alignItems:'center', justifyContent:'center',
                       fontFamily:'var(--font-display)', fontWeight:800, fontSize:'.8rem',
                     }}>
                       {letter}
                     </span>
-                    <span style={{ lineHeight:1.6, color: isSelected ? 'var(--brand)' : 'var(--text)', fontWeight: isSelected ? 600 : 400 }}>
+                    <span style={{ lineHeight:1.6, color: isSelected ? subColor.text : 'var(--text)', fontWeight: isSelected ? 600 : 400 }}>
                       {text}
                     </span>
                   </button>
@@ -241,12 +273,10 @@ export default function ExamPage() {
           borderTop:'1px solid var(--border)', padding:'14px 40px',
           background:'var(--surface)', display:'flex', justifyContent:'space-between',
         }}>
-          <Button variant="secondary" onClick={() => setCurrent(c => Math.max(0, c - 1))}
-            disabled={current === 0}>
+          <Button variant="secondary" onClick={() => setCurrent(c => Math.max(0, c - 1))} disabled={current === 0}>
             <ChevronLeft size={16} /> Previous
           </Button>
-          <Button onClick={() => setCurrent(c => Math.min(totalQ - 1, c + 1))}
-            disabled={current === totalQ - 1}>
+          <Button onClick={() => setCurrent(c => Math.min(totalQ - 1, c + 1))} disabled={current === totalQ - 1}>
             Next <ChevronRight size={16} />
           </Button>
         </div>
@@ -260,43 +290,50 @@ export default function ExamPage() {
         <div style={{ fontSize:'.78rem', fontWeight:700, color:'var(--text-3)', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:14 }}>
           Questions
         </div>
-        {Object.entries(subjectGroups).map(([subName, items]) => (
-          <div key={subName} style={{ marginBottom:16 }}>
-            <div style={{ fontSize:'.72rem', fontWeight:700, color:'var(--brand)', marginBottom:8 }}>
-              {subName}
+        {Object.entries(subjectGroups).map(([subName, items]) => {
+          const sc = getColor(subName);
+          return (
+            <div key={subName} style={{ marginBottom:16 }}>
+              <div style={{
+                fontSize:'.72rem', fontWeight:700, color: sc.text,
+                marginBottom:8, display:'flex', alignItems:'center', gap:5,
+              }}>
+                <div style={{ width:7, height:7, borderRadius:'50%', background: sc.dot, flexShrink:0 }} />
+                {subName}
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:4 }}>
+                {items.map(({ idx, qn }) => {
+                  const ans     = answers[qn.exam_question_id] || qn.selected_answer;
+                  const isFlagQ = flagged[qn.exam_question_id] || qn.is_flagged;
+                  return (
+                    <button key={idx} onClick={() => setCurrent(idx)} style={{
+                      width:32, height:32, borderRadius:6, border:'none', cursor:'pointer',
+                      fontFamily:'var(--font-display)', fontWeight:700, fontSize:'.75rem',
+                      background: idx === current ? sc.border
+                        : isFlagQ ? 'var(--accent-light)'
+                        : ans     ? '#dcfce7'
+                        : 'var(--surface-2)',
+                      color: idx === current ? '#fff'
+                        : isFlagQ ? 'var(--accent)'
+                        : ans     ? 'var(--success)'
+                        : 'var(--text-3)',
+                      outline: idx === current ? `2px solid ${sc.border}` : 'none',
+                      outlineOffset:1,
+                    }}>
+                      {idx + 1}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:4 }}>
-              {items.map(({ idx, qn }) => {
-                const ans     = answers[qn.exam_question_id] || qn.selected_answer;
-                const isFlagQ = flagged[qn.exam_question_id] || qn.is_flagged;
-                return (
-                  <button key={idx} onClick={() => setCurrent(idx)} style={{
-                    width:32, height:32, borderRadius:6, border:'none', cursor:'pointer',
-                    fontFamily:'var(--font-display)', fontWeight:700, fontSize:'.75rem',
-                    background: idx === current ? 'var(--brand)'
-                      : isFlagQ ? 'var(--accent-light)'
-                      : ans     ? '#dcfce7'
-                      : 'var(--surface-2)',
-                    color: idx === current ? '#fff'
-                      : isFlagQ ? 'var(--accent)'
-                      : ans     ? 'var(--success)'
-                      : 'var(--text-3)',
-                    outline: idx === current ? '2px solid var(--brand)' : 'none',
-                    outlineOffset:1,
-                  }}>
-                    {idx + 1}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+          );
+        })}
 
         {/* Legend */}
         <div style={{ marginTop:16, display:'flex', flexDirection:'column', gap:6, fontSize:'.72rem', color:'var(--text-3)' }}>
           {[
-            { color:'var(--brand)', label:'Current' },
-            { color:'#dcfce7',     label:'Answered' },
+            { color:'var(--brand)',        label:'Current' },
+            { color:'#dcfce7',             label:'Answered' },
             { color:'var(--accent-light)', label:'Flagged' },
             { color:'var(--surface-2)',    label:'Unanswered' },
           ].map(({ color, label }) => (
@@ -339,6 +376,7 @@ export default function ExamPage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

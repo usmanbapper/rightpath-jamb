@@ -1,9 +1,9 @@
 const { query, getClient } = require('../../config/database');
-const crypto  = require('crypto');
+const crypto   = require('crypto');
 const pdfParse = require('pdf-parse');
-const multer  = require('multer');
-const path    = require('path');
-const fs      = require('fs');
+const multer   = require('multer');
+const path     = require('path');
+const fs       = require('fs');
 
 // ── Multer config (memory storage for PDF/JSON) ──────────────
 const upload = multer({
@@ -21,8 +21,8 @@ const upload = multer({
 
 function generateCode(length = 16) {
   // Format: XXXX-XXXX-XXXX-XXXX  (alphanumeric, uppercase, no ambiguous chars)
-  const chars  = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const raw    = Array.from({ length }, () => chars[crypto.randomInt(chars.length)]).join('');
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const raw   = Array.from({ length }, () => chars[crypto.randomInt(chars.length)]).join('');
   return `${raw.slice(0,4)}-${raw.slice(4,8)}-${raw.slice(8,12)}-${raw.slice(12,16)}`;
 }
 
@@ -43,12 +43,12 @@ async function generateActivationCodes(req, res, next) {
       return res.status(400).json({ error: 'Count must be between 1 and 500.' });
     }
 
-    const codes = [];
+    const codes     = [];
     const generated = [];
 
     // Generate unique codes (retry on collision)
     while (codes.length < count) {
-      const code = generateCode();
+      const code   = generateCode();
       const exists = await query(
         'SELECT id FROM activation_codes WHERE code = $1', [code]
       );
@@ -212,7 +212,8 @@ async function toggleStudentStatus(req, res, next) {
 }
 
 // ── POST /api/admin/questions/manual ─────────────────────────
-// Body: { subject_id, question_text, option_a..d, correct_answer, explanation?, year?, difficulty?, topic? }
+// Body: { subject_id, question_text, option_a..d, correct_answer,
+//         explanation?, year?, difficulty?, topic? }
 
 async function addQuestionManual(req, res, next) {
   try {
@@ -248,7 +249,7 @@ async function addQuestionManual(req, res, next) {
 
 async function uploadQuestions(req, res, next) {
   try {
-    const file       = req.file;
+    const file           = req.file;
     const { subject_id } = req.body;
 
     if (!file)       return res.status(400).json({ error: 'No file uploaded.' });
@@ -266,14 +267,17 @@ async function uploadQuestions(req, res, next) {
 
       let extractedText = '';
       try {
-        const parsed = await pdfParse(file.buffer);
+        const parsed  = await pdfParse(file.buffer);
         extractedText = parsed.text;
       } catch (e) {
         await query(
           "UPDATE upload_batches SET status = 'failed', error_message = $1 WHERE id = $2",
           [e.message, batchRes.rows[0].id]
         );
-        return res.status(422).json({ error: 'Could not extract text from PDF.', detail: e.message });
+        return res.status(422).json({
+          error:  'Could not extract text from PDF.',
+          detail: e.message,
+        });
       }
 
       return res.json({
@@ -324,12 +328,15 @@ async function uploadQuestions(req, res, next) {
         }
 
         try {
+          // FIX #2: Target the unique constraint explicitly so Postgres
+          // knows which conflict to handle. Requires this constraint in schema:
+          //   UNIQUE (subject_id, question_text)
           await query(
             `INSERT INTO questions
                (subject_id, question_text, option_a, option_b, option_c, option_d,
                 correct_answer, explanation, year, difficulty, topic, uploaded_by, source)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'json_upload')
-             ON CONFLICT DO NOTHING`,
+             ON CONFLICT (subject_id, question_text) WHERE is_active = true DO NOTHING`,
             [
               subject_id,
               q.question_text,
@@ -420,10 +427,18 @@ async function listQuestions(req, res, next) {
 async function deleteQuestion(req, res, next) {
   try {
     const { id } = req.params;
-    await query(
-      'UPDATE questions SET is_active = false WHERE id = $1',
+
+    // FIX #7: Check the question actually exists before returning 200.
+    // Previously this returned 200 even for non-existent IDs.
+    const result = await query(
+      'UPDATE questions SET is_active = false WHERE id = $1 RETURNING id',
       [id]
     );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Question not found.' });
+    }
+
     return res.json({ message: 'Question removed.' });
   } catch (err) {
     next(err);
@@ -461,11 +476,11 @@ async function getDashboard(req, res, next) {
     ]);
 
     return res.json({
-      users:           users.rows[0],
-      questions:       questions.rows[0],
-      sessions:        sessions.rows[0],
+      users:            users.rows[0],
+      questions:        questions.rows[0],
+      sessions:         sessions.rows[0],
       activation_codes: codes.rows[0],
-      recent_sessions: recentSessions.rows,
+      recent_sessions:  recentSessions.rows,
     });
   } catch (err) {
     next(err);

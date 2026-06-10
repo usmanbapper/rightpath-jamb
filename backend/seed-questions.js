@@ -1,6 +1,6 @@
 /**
  * seed-questions.js
- * 
+ *
  * Reads JSON files from the /questions folder and inserts them
  * directly into the database — no upload endpoint needed.
  *
@@ -8,27 +8,23 @@
  *   node seed-questions.js
  *   node seed-questions.js --dry-run   (preview without inserting)
  *   node seed-questions.js --clear     (delete existing questions first)
+ *
+ * FIX #1: Uses pool directly to ensure pool.end() works on exit.
+ * FIX #5: Subject matching is now dynamic (loaded from DB) instead of
+ *         a hardcoded map — no more silently dropped subjects.
  */
 
 require('dotenv').config();
-const path  = require('path');
-const fs    = require('fs');
-const { query, pool } = require('./config/database');
+const path = require('path');
+const fs   = require('fs');
+
+// FIX #1: Import pool directly so pool.end() is always available
+const { Pool } = require('pg');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const query = (text, params) => pool.query(text, params);
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const CLEAR   = process.argv.includes('--clear');
-
-// Map JSON topic names → subjects.name in the database
-const SUBJECT_MAP = {
-  'Chemistry':             'Chemistry',
-  'Economics':             'Economics',
-  'Literature in English': 'Literature in English',
-  'Mathematics':           'Mathematics',
-  'Physics':               'Physics',
-  'Accounting':            'Accounting',
-  'Biology':               'Biology',
-  'Commerce':              'Commerce',
-};
 
 // Folder that contains the JSON files (relative to this script)
 const JSON_DIR = path.join(__dirname, 'questions');
@@ -39,18 +35,24 @@ async function run() {
     console.log('─'.repeat(40));
     if (DRY_RUN) console.log('⚠️  DRY RUN — nothing will be written\n');
 
-    // ── 1. Load subject IDs from the database ────────────────
+    // ── 1. Load subject IDs from the database dynamically ────
+    // FIX #5: Load ALL active subjects from DB — no hardcoded map needed.
+    // JSON files just need to use the exact subject name as stored in the DB.
     const subjectRows = await query('SELECT id, name FROM subjects WHERE is_active = true');
     const subjectIdMap = {};
     for (const row of subjectRows.rows) {
-      subjectIdMap[row.name] = row.id;
+      // Store by exact name AND lowercase for case-insensitive fallback
+      subjectIdMap[row.name]            = row.id;
+      subjectIdMap[row.name.toLowerCase()] = row.id;
     }
-    console.log(`✅ Found ${subjectRows.rows.length} subjects in DB`);
+    console.log(`✅ Found ${subjectRows.rows.length} active subjects in DB:`);
+    subjectRows.rows.forEach(s => console.log(`   • ${s.name}`));
+    console.log('');
 
     // ── 2. Optionally clear existing questions ────────────────
     if (CLEAR && !DRY_RUN) {
-      await query("UPDATE questions SET is_active = false");
-      console.log('🗑️  Cleared existing questions (soft delete)');
+      await query('UPDATE questions SET is_active = false');
+      console.log('🗑️  Cleared existing questions (soft delete)\n');
     }
 
     // ── 3. Find JSON files ────────────────────────────────────
@@ -69,10 +71,10 @@ async function run() {
     console.log(`📂 Found ${files.length} JSON file(s): ${files.join(', ')}\n`);
 
     // ── 4. Process each file ──────────────────────────────────
-    let grandTotal = 0;
+    let grandTotal    = 0;
     let grandInserted = 0;
-    let grandSkipped = 0;
-    let grandErrors = 0;
+    let grandSkipped  = 0;
+    let grandErrors   = 0;
 
     for (const file of files) {
       const filePath = path.join(JSON_DIR, file);
@@ -97,19 +99,20 @@ async function run() {
       for (let i = 0; i < questions.length; i++) {
         const q = questions[i];
 
-        // Resolve subject_id
-        const topicName = q.topic || q.subject;
-        const subjectName = SUBJECT_MAP[topicName] || topicName;
-        const subject_id  = subjectIdMap[subjectName];
+        // FIX #5: Resolve subject_id dynamically — try exact name first,
+        // then lowercase fallback. No hardcoded SUBJECT_MAP.
+        const rawName    = (q.subject || q.topic || '').trim();
+        const subject_id = subjectIdMap[rawName] || subjectIdMap[rawName.toLowerCase()];
 
         if (!subject_id) {
-          console.warn(`   ⚠️  Row ${i + 1}: unknown subject "${topicName}" — skipping`);
+          console.warn(`   ⚠️  Row ${i + 1}: unknown subject "${rawName}" — skipping`);
+          console.warn(`         Available subjects: ${Object.keys(subjectIdMap).filter(k => k === k.toLowerCase() ? false : true).join(', ')}`);
           skipped++;
           continue;
         }
 
         // Validate required fields
-        const required = ['question_text','option_a','option_b','option_c','option_d','correct_answer'];
+        const required = ['question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_answer'];
         const missing  = required.filter(f => !q[f]);
         if (missing.length > 0) {
           console.warn(`   ⚠️  Row ${i + 1}: missing ${missing.join(', ')} — skipping`);
@@ -118,7 +121,7 @@ async function run() {
         }
 
         const answer = String(q.correct_answer).toUpperCase();
-        if (!['A','B','C','D'].includes(answer)) {
+        if (!['A', 'B', 'C', 'D'].includes(answer)) {
           console.warn(`   ⚠️  Row ${i + 1}: invalid correct_answer "${q.correct_answer}" — skipping`);
           skipped++;
           continue;
@@ -127,21 +130,24 @@ async function run() {
         if (DRY_RUN) { inserted++; continue; }
 
         try {
+          // FIX #2: ON CONFLICT now targets the unique constraint explicitly.
+          // Ensure your schema has:
+          //   UNIQUE (subject_id, question_text)  on the questions table.
           await query(
             `INSERT INTO questions
                (subject_id, question_text, option_a, option_b, option_c, option_d,
                 correct_answer, explanation, year, difficulty, topic, source)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'seed')
-             ON CONFLICT DO NOTHING`,
+             ON CONFLICT (subject_id, question_text) WHERE is_active = true DO NOTHING`,
             [
               subject_id,
               q.question_text.trim(),
               q.option_a, q.option_b, q.option_c, q.option_d,
               answer,
-              q.explanation  || null,
-              q.year         || null,
-              q.difficulty   || 'medium',
-              q.topic        || subjectName,
+              q.explanation || null,
+              q.year        || null,
+              q.difficulty  || 'medium',
+              (q.topic || rawName),
             ]
           );
           inserted++;
@@ -172,8 +178,7 @@ async function run() {
     console.error('\n❌ Fatal error:', err.message);
     console.error(err.stack);
   } finally {
+    // FIX #1: pool is now always defined so this never throws
     await pool.end();
   }
 }
-
-run();

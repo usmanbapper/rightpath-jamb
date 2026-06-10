@@ -26,10 +26,13 @@ const allowedOrigins = [
   process.env.FRONTEND_URL,
   'http://localhost:3000',
   'http://localhost:3001',
+  'https://front-3zs3.onrender.com', // hardcode it temporarily
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
+    console.log('CORS origin:', origin); // add this log
+    console.log('Allowed origins:', allowedOrigins); // add this log
     if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
     callback(new Error('Not allowed by CORS'));
   },
